@@ -94,7 +94,7 @@ except Exception:
     docs = loader.load()
     
     if not docs:
-        print(f"\n❌ [CRITICAL ERROR]: No PDFs found in '{DOCS_DIR}'. Place files there and restart.")
+        print(f"\n [CRITICAL ERROR]: No PDFs found in '{DOCS_DIR}'. Place files there and restart.")
         sys.exit(1)
 
     # 2. Split text into manageable chunks
@@ -114,41 +114,98 @@ except Exception:
         path=PERSIST_PATH,
         collection_name=COLLECTION_NAME,
     )
-    print("✅ Collection cleanly built and saved to disk!")
+    print("Collection cleanly built and saved to disk!")
 
 # 4. Construct the retriever
 retriever = vectorstore.as_retriever(search_kwargs={"k": 8})
 
-# 5. Build an expert system prompt tailored for plant pathology
-template = """
-    You are an expert AI Agronomist specializing in Citrus Pathology. 
-    Analyze the question based ONLY on the provided research papers, extension reports, and official documentation guidelines.
+# --- 5. DEFINE PROMPTS CLEARLY ---
+# agronomy_template = """You are an expert AI Agronomist specializing in Citrus Pathology. 
+# Analyze the question based ONLY on the provided research papers, extension reports, and official documentation guidelines.
 
-    When recommending treatments (chemical, biological, or cultural control):
-    1. Be highly precise regarding active ingredients, dosages, application timing, or sanitary measures if mentioned.
-    2. Clearly state the specific citrus disease targeted.
-    3. If the provided documents offer conflicting strategies or mention regional restrictions, note that distinction.
-    4. If the context does not contain clear, verified treatment protocols for the query, state: 
-       "The provided documentation does not detail a verified treatment protocol for this specific issue."
+# When recommending treatments (chemical, biological, or cultural control):
+# 1. Be highly precise regarding active ingredients, dosages, application timing, or sanitary measures if mentioned.
+# 2. Clearly state the specific citrus disease targeted.
+# 3. If the provided documents offer conflicting strategies or mention regional restrictions, note that distinction.
+# 4. If the context does not contain clear, verified treatment protocols for the query, state that verified protocols are unavailable.
 
-    Context Excerpts:
-    {context}
+# Context Excerpts:
+# {context}
 
-    Agronomy Query: 
-    {question}
+# Agronomy Query: 
+# {question}
 
-    Expert Recommendation:"""
+# Expert English Recommendation:"""
+
+# translation_template = """You are a professional, expert translator specializing in agricultural science and plant pathology.
+# Translate the following English technical recommendation into flawless, natural, and grammatically correct {target_language}.
+
+# CRITICAL REQUIREMENTS:
+# - Your entire final response must be in {target_language}. Do not leak a single English word into the text.
+# - Maintain proper Right-to-Left (RTL) formatting if translating to Arabic.
+# - Keep standard botanical scientific names in parentheses if necessary, but translate all prose, verbs, and nouns completely.
+# - Do not add any introductory pleasantries or meta-commentary.
+
+# Text to Translate:
+# {english_recommendation}
+
+# Final Translation:"""
+
+# agronomy_prompt = ChatPromptTemplate.from_template(agronomy_template)
+# translation_prompt = ChatPromptTemplate.from_template(translation_template)
+
+
+# # --- 6. BUILD THE PIPELINE SEQUENTIALLY ---
+
+# from langchain_core.runnables import RunnablePassthrough
+
+# rag_chain = (
+#     # A. First, fetch context and keep the user's question and language intact
+#     {
+#         "context": lambda x: retriever.invoke(x["question"]),
+#         "question": lambda x: x["question"],
+#         "target_language": lambda x: x["target_language"]
+#     }
+#     # B. Next, feed that complete dictionary into the English generation step
+#     | RunnablePassthrough.assign(
+#         english_recommendation=agronomy_prompt | llm | StrOutputParser()
+#     )
+#     # C. Now the dictionary has 'english_recommendation' and 'target_language' ready for the translation prompt
+#     | translation_prompt
+#     | llm
+#     | StrOutputParser()
+# )
+
+# 1. Update LLM component
+llm = ChatOllama(model="aya", temperature=0)
+
+# 2. You can use a clean, single-stage prompt template again!
+template = """You are an expert AI Agronomist specializing in Citrus Pathology. 
+Analyze the question based ONLY on the provided research papers, extension reports, and official documentation guidelines.
+
+CRITICAL REQUIREMENT: You MUST generate your entire final Expert Recommendation response in {target_language}. Do not answer in English.
+
+Context Excerpts:
+{context}
+
+Agronomy Query: 
+{question}
+
+Expert Recommendation (In {target_language}):"""
 
 prompt = ChatPromptTemplate.from_template(template)
 
+# 3. Bring back the clean, fast single-step chain
 rag_chain = (
-    {"context": retriever, "question": RunnablePassthrough()}
+    {
+        "context": lambda x: retriever.invoke(x["question"]), 
+        "question": lambda x: x["question"],
+        "target_language": lambda x: x["target_language"]
+    }
     | prompt
     | llm
     | StrOutputParser()
 )
-print("--- The Citrus RAG Pipeline is Synchronized & Online ---")
-
 
 # --- CORE PIPELINE UTILITIES ---
 def predict(img):
@@ -165,47 +222,95 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in {'png', 'jpg', 'jpeg'}
 
 
-# --- FLASK INTERACTIVE ROUTING ENDPOINT ---
+# --- LOCALIZED UI MESSAGES ---
+UI_MESSAGES = {
+    "English": {
+        "upload": "Upload an image",
+        "no_file_part": "No file part in the request",
+        "no_file_selected": "No selected file"
+    },
+    "French": {
+        "upload": "Téléchargez une image",
+        "no_file_part": "Pas de fichier dans la requête",
+        "no_file_selected": "Aucun fichier sélectionné"
+    },
+    "Spanish": {
+        "upload": "Subir una imagen",
+        "no_file_part": "No hay parte de archivo en la solicitud",
+        "no_file_selected": "No se ha seleccionado ningún archivo"
+    },
+    "Arabic": {
+        "upload": "يرجى تحميل صورة",
+        "no_file_part": "لم يتم إرسال أي ملف في الطلب",
+        "no_file_selected": "لم يتم اختيار أي ملف"
+    }
+}
+
+# --- ENDPOINTS ---
 @app.route('/', methods=['GET', 'POST'])
 def home():
     if request.method == 'POST':
+        # Now we safely look for the language sent by the form submission
+        target_language = request.form.get('language', 'English')
+        lang_content = UI_MESSAGES.get(target_language, UI_MESSAGES["English"])
+
         if 'file' not in request.files:
-            return render_template('index.html', message='No file part')
+            return render_template('index1.html', message=lang_content["no_file_part"], selected_language=target_language)
 
         file = request.files['file']
 
         if file.filename == '':
-            return render_template('index.html', message='No selected file')
+            return render_template('index1.html', message=lang_content["no_file_selected"], selected_language=target_language)
 
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
             filepath = os.path.join('static', filename)
             file.save(filepath)
 
-            # Process prediction using image instance
+            # RUN PREDICTION ONLY (Fast Keras Inference)
             img = tf.keras.preprocessing.image.load_img(filepath, target_size=(IMAGE_SIZE, IMAGE_SIZE))
             predicted_class, confidence = predict(img)
 
-            # Auto-generate contextual RAG prompt matching the model output
-            if predicted_class != 'healthy':
-                rag_query = f"What is the recommended management protocol and treatment for {predicted_class} in citrus trees?"
-                treatment_recommendation = rag_chain.invoke(rag_query)
-            else:
-                treatment_recommendation = "No pathogen control measures required. The sample is evaluated as healthy. Continue normal preventive orchard surveillance."
-
-            # Render UI with classification metrics and retrieved context recommendations
             return render_template(
-                'index.html', 
+                'index1.html', 
                 image_path=filepath, 
                 actual_label=os.path.splitext(filename)[0].split('_')[0], 
                 predicted_label=predicted_class, 
                 confidence=confidence,
-                treatment=treatment_recommendation
+                selected_language=target_language # Preserves state after inference
             )
 
-    return render_template('index.html', message='Upload an image')
+    # FOR GET REQUESTS: Just serve the page. JavaScript will load the language from localStorage.
+    return render_template('index1.html', message=None)
+
+@app.route('/get_treatment', methods=['POST'])
+def get_treatment():
+    data = request.get_json() or {}
+    predicted_class = data.get('predicted_label', 'healthy').strip().lower()
+    target_language = data.get('language', 'English') # Captures dropdown state
+
+    # Run the RAG system on-demand
+    if predicted_class != 'healthy':
+        rag_query = f"What is the recommended management protocol and treatment for {predicted_class} in citrus trees?"
+        
+        # We pass both query context and target localization keyword down the chain
+        treatment_recommendation = rag_chain.invoke({
+            "question": rag_query,
+            "target_language": target_language
+        })
+    else:
+        # Pre-translated status placeholders for healthy leaves
+        healthy_responses = {
+            "English": "No pathogen control measures required. The sample is evaluated as healthy. Continue normal preventive orchard surveillance.",
+            "French": "Aucune mesure de contrôle des agents pathogènes requise. L'échantillon est évalué comme sain. Poursuivre la surveillance normale du verger.",
+            "Spanish": "No se requieren medidas de control de patógenos. La muestra se evalúa como sana. Continuar con la vigilancia preventiva normal del huerto.",
+            "Arabic": "لا توجد تدابير لمكافحة الآفات مطلوبة. تم تقييم العينة على أنها سليمة تماماً. يرجى الاستمرار في مراقبة البستان."
+        }
+        treatment_recommendation = healthy_responses.get(target_language, healthy_responses["English"])
+
+    # Return output string back to JavaScript engine
+    return treatment_recommendation
+
 
 if __name__ == '__main__':
     app.run(debug=False)
-# if __name__ == '__main__':
-#     app.run(debug=True, use_reloader=False)

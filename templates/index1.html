@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Citrus Vision AI & Smart Pathology RAG</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+    
+    <style>
+      :root {
+        --primary-orange: #f97316;
+        --dark-gradient: #ea580c;
+        --bg-slate: #f8fafc;
+        --card-shadow: 0 10px 30px -5px rgba(249, 115, 22, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
+      }
+
+      body {
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        background-color: var(--bg-slate);
+        color: #1e293b;
+        min-height: 100vh;
+        position: relative;
+      }
+
+      /* Floating Interactive Language Picker Container */
+      .lang-picker-container {
+        position: absolute;
+        top: 24px;
+        right: 24px;
+        z-index: 1050;
+      }
+
+      .lang-icon-btn {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 50%;
+        width: 44px;
+        height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #64748b;
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        transition: all 0.2s ease;
+      }
+      .lang-icon-btn:hover {
+        color: var(--primary-orange);
+        border-color: var(--primary-orange);
+        transform: scale(1.05);
+      }
+
+      .lang-dropdown-menu {
+        position: absolute;
+        top: 52px;
+        right: 0;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        box-shadow: 0 12px 24px -4px rgba(0, 0, 0, 0.1);
+        padding: 6px;
+        min-width: 160px;
+        display: none;
+        animation: fadeIn 0.15s ease-out;
+      }
+      .lang-dropdown-menu.show {
+        display: block;
+      }
+
+      .lang-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        padding: 10px 14px;
+        border: none;
+        background: none;
+        border-radius: 8px;
+        color: #334155;
+        font-size: 0.9rem;
+        font-weight: 500;
+        text-align: left;
+        transition: background 0.15s ease;
+      }
+      .lang-item:hover {
+        background: #f1f5f9;
+        color: var(--primary-orange);
+      }
+
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-8px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      /* Existing Layout Rules */
+      .brand-title {
+        font-weight: 700;
+        letter-spacing: -0.05em;
+        background: linear-gradient(to right, var(--primary-orange), var(--dark-gradient));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .main-workspace-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 24px;
+        box-shadow: var(--card-shadow);
+      }
+
+      .drop-zone {
+        border: 2px dashed #cbd5e1;
+        border-radius: 16px;
+        background: #fafafa;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+      .drop-zone:hover {
+        border-color: var(--primary-orange);
+        background: rgba(249, 115, 22, 0.02);
+      }
+
+      .metric-pill {
+        font-weight: 600;
+        padding: 6px 14px;
+        border-radius: 30px;
+        font-size: 0.9rem;
+      }
+
+      .btn-classify {
+        background: linear-gradient(135deg, var(--primary-orange), var(--dark-gradient));
+        color: white;
+        font-weight: 600;
+        border: none;
+        border-radius: 12px;
+        padding: 12px;
+      }
+      .btn-classify:hover {
+        box-shadow: 0 4px 12px rgba(234, 88, 12, 0.3);
+        color: white;
+      }
+
+      .rag-btn {
+        background-color: #1e293b;
+        color: #ffffff;
+        font-weight: 600;
+        border-radius: 12px;
+        padding: 12px 24px;
+        border: none;
+      }
+
+      .rag-response-box {
+        background-color: #fafafa;
+        border-left: 4px solid var(--primary-orange);
+        border-radius: 8px;
+      }
+    </style>
+  </head>
+  <body class="py-5">
+    
+    <div class="lang-picker-container" id="langContainer">
+      <button type="button" class="lang-icon-btn" onclick="toggleLangMenu(event)" aria-label="Toggle Language Menu">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="bi bi-globe" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="2" y1="12" x2="22" y2="12"></line>
+          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+        </svg>
+      </button>
+      <div class="lang-dropdown-menu" id="langDropdown">
+        <button type="button" class="lang-item" onclick="selectAppLanguage('English')">English <span>🇺🇸</span></button>
+        <button type="button" class="lang-item" onclick="selectAppLanguage('French')">Français <span>🇫🇷</span></button>
+        <button type="button" class="lang-item" onclick="selectAppLanguage('Spanish')">Español <span>🇪🇸</span></button>
+        <button type="button" class="lang-item" onclick="selectAppLanguage('Arabic')">العربية <span>🇲🇦</span></button>
+      </div>
+    </div>
+
+    <div class="container">
+      <div class="text-center mb-5">
+        <h1 class="brand-title d-inline-flex align-items-center gap-3">
+          <img src="static/icon.png" alt="Portal Logo" width="60" height="60" onerror="this.style.display='none'">
+          <span id="txt-app-title">Citrus Health Diagnostics</span>
+          <img src="static/icon.png" alt="Portal Logo" width="60" height="60" onerror="this.style.display='none'">
+        </h1>
+      </div>
+
+      <div class="row justify-content-center">
+        <div class="col-lg-8">
+          
+          <div class="main-workspace-card p-4 p-md-5">
+            <h3 class="fw-bold mb-4 text-center text-md-start" id="txt-analyze-title" style="letter-spacing: -0.02em;">Analyze Specimen</h3>
+            
+            <form action="/" method="post" enctype="multipart/form-data" class="mb-2">
+              <div class="drop-zone p-4 text-center" onclick="document.getElementById('fileInput').click()">
+                <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" fill="currentColor" class="text-muted mb-2" viewBox="0 0 16 16">
+                  <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+                  <path d="M7.646 1.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1-.708.708L8.5 2.707V11.5a.5.5 0 0 1-1 0V2.707L5.354 4.854a.5.5 0 1 1-.708-.708l3-3z"/>
+                </svg>
+                <p class="mb-1 text-secondary fw-medium" id="txt-dropzone-main">Click to select or drag citrus leaf file</p>
+                <p class="text-muted small mb-0" id="txt-dropzone-sub">Supports high-res PNG, JPG, JPEG samples</p>
+                <input type="file" id="fileInput" name="file" accept=".jpg, .jpeg, .png" class="form-control d-none" onchange="updateFileNameDisplay(this)">
+              </div>
+
+              {% if message %}
+                <div class="alert-danger py-2 text-center text-danger small fw-semibold mt-3" role="alert" style="border-radius: 8px;" id="serverMessage">
+                  {{ message }}
+                </div>
+              {% else %}
+                <div class="alert-danger py-2 text-center text-danger small fw-semibold mt-3" role="alert" style="border-radius: 8px;" id="serverMessage" id="txt-upload">
+                  Upload an image
+                </div>
+              {% endif %}
+              
+              <div id="fileFeedback" class="text-center text-muted small mb-3 d-none fw-medium"></div>
+
+              <div class="d-grid">
+                <button type="submit" class="btn btn-classify btn-lg mt-3" id="txt-btn-inference">Run Computer Vision Inference</button>
+              </div>
+
+              {% if image_path %}
+                <hr class="my-5 text-muted opacity-25">
+
+                <div class="row g-4 align-items-center">
+                  <div class="col-md-5 text-center">
+                    <img src="{{ image_path }}" alt="Leaf Specimen" class="img-fluid rounded-4 shadow-sm border" style="max-height: 240px; width: 100%; object-fit: cover;">
+                  </div>
+                  
+                  <div class="col-md-7">
+                    <div class="ps-md-2">
+                      <h4 class="fw-bold my-1 text-dark" id="txt-output-title">Classification Output</h4>
+                      
+                      <div class="mt-3 space-y-2">
+                        <p class="mb-2 d-flex justify-content-between align-items-center border-bottom pb-2">
+                          <span class="text-secondary" id="txt-metric-pathogen">Predicted Pathogen:</span>
+                          <span id="classValue" class="badge metric-pill {% if predicted_label == 'healthy' %}bg-success-subtle text-success{% else %}bg-danger-subtle text-danger{% endif %} text-capitalize">
+                            {{ predicted_label }}
+                          </span>
+                        </p>
+                        <p class="mb-0 d-flex justify-content-between align-items-center">
+                          <span class="text-secondary" id="txt-metric-confidence">Network Confidence:</span>
+                          <span class="text-success fw-bold fs-5">{{ confidence }}%</span>
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="mt-5 p-4 text-center bg-light rounded-4 border" id="ragActionBox">
+                  <div class="mb-3">
+                    <span class="badge bg-warning-subtle text-warning-emphasis rounded-pill px-3 py-2 fw-semibold" id="txt-phase-badge">Next Phase Available</span>
+                  </div>
+                  <h5 class="fw-bold text-dark" id="txt-rag-prompt-title">Consult Local Agronomic Knowledge Base?</h5>
+                  <p class="text-muted small mx-auto" style="max-width: 500px;" id="txt-rag-prompt-sub">
+                    We found a pathogen match. Launch the secure local RAG framework to extract approved cultural containment steps, treatment formulas, and chemical spray ratios.
+                  </p>
+                  
+                  <button type="button" class="btn rag-btn mt-2 shadow-sm d-inline-flex align-items-center gap-2" id="loadRagBtn" onclick="launchRAGSystem()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-cpu" viewBox="0 0 16 16">
+                      <path d="M8 2a.5.5 0 0 1 .5.5v.759A2.501 2.501 0 0 1 10.5 5.75H11.5a.5.5 0 0 1 0 1H10.5A2.501 2.501 0 0 1 8.5 8.995v.764a.5.5 0 0 1-1 0V8.996A2.501 2.501 0 0 1 5.5 5.75H4.5a.5.5 0 0 1 0-1H5.5A2.501 2.501 0 0 1 7.5 3.259V2.5A.5.5 0 0 1 8 2zM5.5 4.75a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM10.5 4.75a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/>
+                    </svg>
+                    <span id="txt-btn-rag">Extract Expert Recommendations</span>
+                  </button>
+                  
+                  <div id="ragSpinner" class="d-none mt-3 py-2">
+                    <div class="spinner-border text-dark spinner-border-sm" role="status"></div>
+                    <span class="text-muted small ms-2" id="txt-spinner-msg">Reading physical PDF vector storage cache...</span>
+                  </div>
+                </div>
+
+                <div class="mt-5 d-none" id="ragResultBox">
+                  <h5 class="fw-bold text-dark mb-3 d-flex align-items-center gap-2">
+                    <span style="width: 4px; height: 18px; background-color: var(--primary-orange); display: inline-block; border-radius: 2px;"></span>
+                    <span id="txt-protocol-title">Verified Treatment Protocol</span>
+                  </h5>
+                  <div class="rag-response-box p-4 bg-light">
+                    <p class="mb-0 text-dark" id="treatmentText" style="white-space: pre-line; line-height: 1.7; font-size: 0.98rem;"></p>
+                  </div>
+                </div>
+              {% endif %}
+            </form>
+          </div>
+          
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let currentSelectedLanguage = 'English';
+
+      const translations = {
+        English: {
+          "app-title": "Citrus Health Diagnostics",
+          "analyze-title": "Analyze Specimen",
+          "dropzone-main": "Click to select or drag citrus leaf file",
+          "dropzone-sub": "Supports high-res PNG, JPG, JPEG samples",
+          "btn-inference": "Run Computer Vision Inference",
+          "output-title": "Classification Output",
+          "metric-pathogen": "Predicted Pathogen:",
+          "metric-confidence": "Network Confidence:",
+          "phase-badge": "Next Phase Available",
+          "rag-prompt-title": "Consult Local Agronomic Knowledge Base?",
+          "rag-prompt-sub": "We found a pathogen match. Launch the secure local RAG framework to extract approved cultural containment steps, treatment formulas, and chemical spray ratios.",
+          "btn-rag": "Extract Expert Recommendations",
+          "spinner-msg": "Reading physical PDF vector storage cache...",
+          "protocol-title": "Verified Treatment Protocol",
+          "feedback-prefix": "Selected Specimen: ",
+          "upload": "Upload an image",
+        },
+        French: {
+          "app-title": "Diagnostic de Santé des Agrumes",
+          "analyze-title": "Analyser l'Échantillon",
+          "dropzone-main": "Cliquez pour sélectionner ou glisser une feuille d'agrume",
+          "dropzone-sub": "Prend en charge les échantillons PNG, JPG, JPEG haute résolution",
+          "btn-inference": "Exécuter l'Inférence de Vision par Ordinateur",
+          "output-title": "Résultat de la Classification",
+          "metric-pathogen": "Pathogène Prédit:",
+          "metric-confidence": "Confiance du Réseau:",
+          "phase-badge": "Prochaine Phase Disponible",
+          "rag-prompt-title": "Consulter la Base de Connaissances Agronomiques?",
+          "rag-prompt-sub": "Nous avons trouvé un pathogène correspondant. Lancez le système RAG local pour extraire les étapes de confinement, les formules de traitement et les ratios de pulvérisation.",
+          "btn-rag": "Extraire les Recommandations d'Experts",
+          "spinner-msg": "Lecture du stockage vectoriel PDF...",
+          "protocol-title": "Protocole de Traitement Vérifié",
+          "feedback-prefix": "Échantillon Sélectionné: ",
+          "upload": "Téléchargez une image",
+        },
+        Spanish: {
+          "app-title": "Diagnóstico de Salud de Cítricos",
+          "analyze-title": "Analizar Espécimen",
+          "dropzone-main": "Haga clic para seleccionar o arrastrar la hoja de cítrico",
+          "dropzone-sub": "Soporta muestras PNG, JPG, JPEG de alta resolución",
+          "btn-inference": "Ejecutar Inferencia de Visión Artificial",
+          "output-title": "Resultado de Clasificación",
+          "metric-pathogen": "Patógeno Predicho:",
+          "metric-confidence": "Confianza de la Red:",
+          "phase-badge": "Siguiente Fase Disponible",
+          "rag-prompt-title": "¿Consultar Base de Conocimiento Agronómico?",
+          "rag-prompt-sub": "Encontramos una coincidencia de patógenos. Inicie el marco RAG local seguro para extraer pasos de contención, fórmulas de tratamiento y proporciones de aspersión.",
+          "btn-rag": "Extraer Recomendaciones de Expertos",
+          "spinner-msg": "Leyendo almacenamiento vectorial de PDF...",
+          "protocol-title": "Protocolo de Tratamiento Verificado",
+          "feedback-prefix": "Espécimen Seleccionado: ",
+          "upload": "Subir una imagen",
+        },
+        Arabic: {
+          "app-title": "تشخيص صحة الحمضيات",
+          "analyze-title": "تحليل العينة",
+          "dropzone-main": "انقر لاختيار أو سحب ملف ورقة الحمضيات",
+          "dropzone-sub": "يدعم صيغ PNG, JPG, JPEG عالية الدقة",
+          "btn-inference": "تشغيل نموذج الرؤية الحاسوبية",
+          "output-title": "نتائج التصنيف",
+          "metric-pathogen": "المرض المتوقع:",
+          "metric-confidence": "درجة ثقة النموذج:",
+          "phase-badge": "المرحلة التالية متاحة",
+          "rag-prompt-title": "استشارة قاعدة المعرفة الزراعية المحلية؟",
+          "rag-prompt-sub": "تم العثور على ممرض مطابق. قم بتشغيل نظام RAG المحلي لاستخراج خطوات الاحتواء المعتمدة، وتركيبات العلاج، ونسب الرش الكيميائي.",
+          "btn-rag": "استخراج توصيات الخبراء",
+          "spinner-msg": "قراءة ذاكرة التخزين المؤقت لملفات PDF...",
+          "protocol-title": "بروتوكول العلاج المعتمد",
+          "feedback-prefix": "العينة المختارة: ",
+          "upload": "يرجى تحميل صورة",
+        }
+      };
+
+      // Toggle display of the custom floating popover window
+      function toggleLangMenu(event) {
+        event.stopPropagation();
+        document.getElementById('langDropdown').classList.toggle('show');
+      }
+
+      // Processes option selection, triggers localization, and auto-hides menu container
+      function selectAppLanguage(lang) {
+        currentSelectedLanguage = lang;
+        document.getElementById('langDropdown').classList.remove('show');
+        
+        // Handle Layout Adjustments for Text Directions
+        if (lang === "Arabic") {
+          document.body.style.direction = "rtl";
+          document.body.style.textAlign = "right";
+          document.getElementById('langDropdown').style.left = "0";
+          document.getElementById('langDropdown').style.right = "auto";
+        } else {
+          document.body.style.direction = "ltr";
+          document.body.style.textAlign = "left";
+          document.getElementById('langDropdown').style.right = "0";
+          document.getElementById('langDropdown').style.left = "auto";
+        }
+
+        // Apply translations
+        const dict = translations[lang];
+        for (const key in dict) {
+          const el = document.getElementById(`txt-${key}`);
+          if (el) el.innerText = dict[key];
+        }
+
+        // Check file display feedback update
+        const feedback = document.getElementById('fileFeedback');
+        const fileInput = document.getElementById('fileInput');
+        if (fileInput.files && fileInput.files[0]) {
+           feedback.innerText = `${dict['feedback-prefix']}${fileInput.files[0].name}`;
+        }
+
+        const msgBox = document.getElementById('serverMessage');
+        if (msgBox) {
+          const currentText = msgBox.innerText.trim();
+          
+          // Check what the current string says (in any language) and swap it to the newly selected language
+          if (currentText.includes("Upload an image") || currentText.includes("Téléchargez") || currentText.includes("Subir") || currentText.includes("تحميل")) {
+            msgBox.innerText = dict["upload"] || "Upload an image";
+          } else if (currentText.includes("No file part") || currentText.includes("Pas de fichier") || currentText.includes("No hay parte") || currentText.includes("لم يتم إرسال")) {
+            if(lang === "English") msgBox.innerText = "No file part in the request";
+            if(lang === "French")  msgBox.innerText = "Pas de fichier dans la requête";
+            if(lang === "Spanish") msgBox.innerText = "No hay parte de archivo en la solicitud";
+            if(lang === "Arabic")  msgBox.innerText = "لم يتم إرسال أي ملف في الطلب";
+          } else if (currentText.includes("No selected file") || currentText.includes("Aucun fichier") || currentText.includes("No se ha seleccionado") || currentText.includes("لم يتم اختيار")) {
+            if(lang === "English") msgBox.innerText = "No selected file";
+            if(lang === "French")  msgBox.innerText = "Aucun fichier sélectionné";
+            if(lang === "Spanish") msgBox.innerText = "No se ha seleccionado ningún archivo";
+            if(lang === "Arabic")  msgBox.innerText = "لم يتم اختيار أي ملف";
+          }
+        }
+
+        localStorage.setItem('preferredLanguage', lang);
+      }
+
+      // Close popover instantly if user clicks outside of icon target area
+      window.addEventListener('click', () => {
+        document.getElementById('langDropdown').classList.remove('show');
+      });
+
+      function updateFileNameDisplay(input) {
+        const feedback = document.getElementById('fileFeedback');
+        const alertMessage = document.querySelector('.alert-danger'); 
+        const oldActionBox = document.getElementById('ragActionBox');  
+        const oldResultBox = document.getElementById('ragResultBox');  
+        const oldMetricsRow = document.querySelector('.row.g-4');      
+        const dividerLine = document.querySelector('hr.my-5');         
+
+        if(input.files && input.files[0]) {
+          const prefix = translations[currentSelectedLanguage]['feedback-prefix'];
+          feedback.innerText = `${prefix}${input.files[0].name}`;
+          feedback.classList.remove('d-none');
+
+          if (alertMessage) alertMessage.style.display = 'none'; 
+          if (oldMetricsRow)  oldMetricsRow.classList.add('d-none');
+          if (dividerLine)    dividerLine.classList.add('d-none');
+          if (oldActionBox)   oldActionBox.classList.add('d-none');
+          if (oldResultBox)   oldResultBox.classList.add('d-none');
+        }
+      }
+
+      function launchRAGSystem() {
+          const button = document.getElementById('loadRagBtn');
+          const spinner = document.getElementById('ragSpinner');
+          const resultBox = document.getElementById('ragResultBox');
+          const textContainer = document.getElementById('treatmentText');
+          const currentLabel = document.getElementById('classValue').innerText.trim();
+
+          button.classList.add('d-none');
+          spinner.classList.remove('d-none');
+
+          fetch('/get_treatment', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                predicted_label: currentLabel,
+                language: currentSelectedLanguage 
+              })
+          })
+          .then(response => response.text())
+          .then(responseText => {
+              textContainer.innerText = responseText;
+              spinner.classList.add('d-none');
+              resultBox.classList.remove('d-none');
+          })
+          .catch(error => {
+              console.error('Local Agent Loop Error:', error);
+              textContainer.innerText = 'Error processing text database configuration.';
+              spinner.classList.add('d-none');
+              resultBox.classList.remove('d-none');
+          });
+      }
+
+      window.addEventListener('DOMContentLoaded', () => {
+         const savedLang = localStorage.getItem('preferredLanguage') || 'English';
+         selectAppLanguage(savedLang);
+      });
+
+      window.addEventListener('DOMContentLoaded', () => {
+        // 1. Give priority to explicit post-inference language context from server, fallback to localStorage
+        const serverLanguage = "{{ selected_language }}";
+        const savedLang = (serverLanguage && serverLanguage !== "None" && serverLanguage !== "") ? serverLanguage : (localStorage.getItem('preferredLanguage') || 'English');
+        
+        // 2. Set the global application view state
+        selectAppLanguage(savedLang);
+
+        // 3. Translate the alert message container manually if it contains server-side fallback text
+        const msgBox = document.getElementById('serverMessage');
+        if (msgBox) {
+            const currentText = msgBox.innerText.trim();
+            
+            if (currentText.includes("Upload an image") || currentText.includes("Téléchargez") || currentText.includes("Subir") || currentText.includes("تحميل")) {
+                msgBox.innerText = translations[savedLang]["upload"];
+            } else if (currentText.includes("No file part") || currentText.includes("Pas de fichier") || currentText.includes("No hay parte") || currentText.includes("لم يتم إرسال")) {
+                if(savedLang === "French") msgBox.innerText = "Pas de fichier dans la requête";
+                if(savedLang === "Spanish") msgBox.innerText = "No hay parte de archivo en la solicitud";
+                if(savedLang === "Arabic") msgBox.innerText = "لم يتم إرسال أي ملف في الطلب";
+            } else if (currentText.includes("No selected file") || currentText.includes("Aucun fichier") || currentText.includes("No se ha seleccionado") || currentText.includes("لم يتم اختيار")) {
+                if(savedLang === "French") msgBox.innerText = "Aucun fichier sélectionné";
+                if(savedLang === "Spanish") msgBox.innerText = "No se ha seleccionado ningún archivo";
+                if(savedLang === "Arabic") msgBox.innerText = "لم يتم اختيار أي ملف";
+            }
+        }
+      });
+
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
+  </body>
+</html>

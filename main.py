@@ -5,6 +5,7 @@ from flask import Flask, render_template, request
 from werkzeug.utils import secure_filename
 import tensorflow as tf
 import numpy as np
+from explainability import run_complete_xai_pipeline
 
 # RAG Integration Frameworks
 from langchain_community.document_loaders import PyPDFDirectoryLoader
@@ -271,17 +272,27 @@ def home():
             img = tf.keras.preprocessing.image.load_img(filepath, target_size=(IMAGE_SIZE, IMAGE_SIZE))
             predicted_class, confidence = predict(img)
 
+           # 2. Complete XAI Execution Chain
+            # Pass your background images dataset variable if using SHAP
+            lime_file = run_complete_xai_pipeline(
+                filepath, 
+                model, 
+                'conv2d_5', 
+            )
+
             return render_template(
                 'index1.html', 
                 image_path=filepath, 
+                lime_path=os.path.join('static', lime_file),
                 actual_label=os.path.splitext(filename)[0].split('_')[0], 
                 predicted_label=predicted_class, 
                 confidence=confidence,
-                selected_language=target_language # Preserves state after inference
+                selected_language=target_language
             )
 
     # FOR GET REQUESTS: Just serve the page. JavaScript will load the language from localStorage.
     return render_template('index1.html', message=None)
+
 
 @app.route('/get_treatment', methods=['POST'])
 def get_treatment():

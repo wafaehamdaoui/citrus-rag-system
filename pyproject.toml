@@ -10,9 +10,13 @@ dependencies = [
     "langchain-huggingface>=1.2.2",
     "langchain-ollama>=1.1.0",
     "langchain-qdrant>=1.1.0",
+    "lime>=0.2.0.1",
+    "matplotlib>=3.10.9",
+    "opencv-python>=4.13.0.92",
     "pillow>=12.2.0",
     "pypdf>=6.12.2",
     "qdrant-client>=1.18.0",
     "sentence-transformers>=5.5.1",
+    "shap>=0.52.0",
     "tensorflow>=2.21.0",
 ]
